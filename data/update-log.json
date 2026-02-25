@@ -1,0 +1,35 @@
+[
+  {
+    "timestamp": "2026-02-25T04:26:41.292Z",
+    "stats": {
+      "totalTransactions": null,
+      "totalVolume": null,
+      "uniqueBuyers": null,
+      "uniqueSellers": ",",
+      "avgTxSize": null,
+      "lastUpdated": "2026-02-25"
+    },
+    "sourcesStatus": [
+      {
+        "source": "x402scan",
+        "hasData": false,
+        "rawLength": 632049
+      },
+      {
+        "source": "x402list",
+        "hasData": false,
+        "rawLength": 158424
+      },
+      {
+        "source": "dune",
+        "hasData": false,
+        "rawLength": 0
+      },
+      {
+        "source": "ecosystem",
+        "hasData": true,
+        "rawLength": 430640
+      }
+    ]
+  }
+]
