@@ -1,0 +1,12 @@
+{
+  "name": "x402-scanner",
+  "version": "1.0.0",
+  "description": "x402 Agent-to-Agent Transaction Analysis Dashboard",
+  "scripts": {
+    "dev": "npx serve public",
+    "build": "echo 'Static site - no build needed'"
+  },
+  "keywords": ["x402", "agent", "transactions", "analytics"],
+  "author": "manavaga",
+  "license": "MIT"
+}

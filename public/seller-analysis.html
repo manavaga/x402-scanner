@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x402 Seller Agent Deep Dive - Why AI Agents Buy These Services</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e1a;
+            color: #e0e6ed;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #0f1628 0%, #1a1f3a 100%);
+            border-bottom: 1px solid #2a3055;
+            padding: 24px 40px;
+        }
+        .header h1 { font-size: 28px; font-weight: 700; color: #fff; }
+        .header h1 span { color: #6366f1; }
+        .header p { color: #8892a8; margin-top: 6px; font-size: 14px; }
+        .nav { display: flex; gap: 12px; margin-top: 12px; }
+        .nav a {
+            color: #6366f1;
+            text-decoration: none;
+            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: 1px solid #2a3055;
+            transition: all 0.2s;
+        }
+        .nav a:hover, .nav a.active { background: rgba(99,102,241,0.15); border-color: #6366f1; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 32px 40px; }
+
+        /* Summary strip */
+        .summary-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #141830 0%, #1a1f3a 100%);
+            border: 1px solid #2a3055;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-card .num { font-size: 32px; font-weight: 700; }
+        .stat-card .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #6b7590; margin-top: 4px; }
+        .purple { color: #a78bfa; }
+        .green { color: #34d399; }
+        .blue { color: #60a5fa; }
+        .orange { color: #fb923c; }
+        .pink { color: #f472b6; }
+        .yellow { color: #fbbf24; }
+        .red { color: #f87171; }
+
+        /* Section */
+        .section {
+            background: linear-gradient(135deg, #141830 0%, #1a1f3a 100%);
+            border: 1px solid #2a3055;
+            border-radius: 12px;
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+        .section h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #fff;
+        }
+        .section h2 span { color: #6366f1; }
+        .section .subtitle { color: #6b7590; font-size: 13px; margin-bottom: 20px; }
+
+        /* Charts */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .chart-box {
+            background: linear-gradient(135deg, #141830 0%, #1a1f3a 100%);
+            border: 1px solid #2a3055;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .chart-box h3 { font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 16px; }
+        .chart-wrap { position: relative; height: 320px; }
+        .chart-wrap-tall { position: relative; height: 400px; }
+
+        /* Agent Cards */
+        .agent-grid { display: flex; flex-direction: column; gap: 20px; }
+        .agent-card {
+            background: #0f1628;
+            border: 1px solid #2a3055;
+            border-radius: 12px;
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 60px 1fr 280px;
+            gap: 24px;
+            transition: border-color 0.2s;
+        }
+        .agent-card:hover { border-color: #6366f1; }
+        .agent-rank {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 4px;
+        }
+        .rank-badge {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 16px;
+        }
+        .rank-gold { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #000; }
+        .rank-silver { background: linear-gradient(135deg, #9ca3af, #6b7280); color: #000; }
+        .rank-bronze { background: linear-gradient(135deg, #d97706, #b45309); color: #fff; }
+        .rank-normal { background: #1e2445; color: #8892a8; }
+
+        .agent-info h3 { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+        .agent-info .agent-url { font-size: 12px; color: #6366f1; margin-bottom: 10px; }
+        .agent-info .agent-category {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .cat-marketplace { background: rgba(99,102,241,0.15); color: #a78bfa; }
+        .cat-ai { background: rgba(52,211,153,0.15); color: #34d399; }
+        .cat-security { background: rgba(248,113,113,0.15); color: #f87171; }
+        .cat-data { background: rgba(96,165,250,0.15); color: #60a5fa; }
+        .cat-gateway { background: rgba(251,146,60,0.15); color: #fb923c; }
+        .cat-defi { background: rgba(244,114,182,0.15); color: #f472b6; }
+        .cat-infra { background: rgba(163,163,163,0.15); color: #a3a3a3; }
+        .cat-social { background: rgba(45,212,191,0.15); color: #2dd4bf; }
+        .cat-storage { background: rgba(251,191,36,0.15); color: #fbbf24; }
+        .cat-intel { background: rgba(196,181,253,0.15); color: #c4b5fd; }
+        .cat-voice { background: rgba(129,140,248,0.15); color: #818cf8; }
+        .cat-news { background: rgba(253,224,71,0.15); color: #fde047; }
+
+        .agent-desc { font-size: 13px; color: #8892a8; line-height: 1.6; margin-bottom: 12px; }
+        .why-box {
+            background: rgba(99,102,241,0.06);
+            border-left: 3px solid #6366f1;
+            padding: 10px 14px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 12px;
+        }
+        .why-box .why-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6366f1; font-weight: 600; margin-bottom: 4px; }
+        .why-box p { font-size: 12px; color: #a5b4c8; line-height: 1.5; }
+
+        .endpoints {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .endpoint-tag {
+            padding: 3px 8px;
+            background: #1e2445;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #8892a8;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .agent-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-left: 1px solid #2a3055;
+            padding-left: 24px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7590; }
+        .stat-value { font-size: 14px; font-weight: 600; color: #fff; }
+        .stat-value.sm { font-size: 12px; }
+        .price-table {
+            width: 100%;
+            margin-top: 4px;
+        }
+        .price-table td {
+            padding: 4px 0;
+            font-size: 11px;
+            border-bottom: 1px solid #1e2445;
+        }
+        .price-table td:first-child { color: #8892a8; }
+        .price-table td:last-child { color: #34d399; font-weight: 600; text-align: right; font-family: 'SF Mono', monospace; }
+
+        /* Pattern cards */
+        .pattern-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        .pattern-card {
+            background: #0f1628;
+            border: 1px solid #2a3055;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .pattern-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+        .pattern-card p { font-size: 12px; color: #8892a8; line-height: 1.5; }
+        .pattern-card .flow {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(99,102,241,0.06);
+            border-radius: 6px;
+            font-size: 11px;
+            color: #a78bfa;
+            font-family: 'SF Mono', monospace;
+            line-height: 1.6;
+        }
+
+        /* Success factors */
+        .factor-list { list-style: none; }
+        .factor-list li {
+            padding: 14px 0;
+            border-bottom: 1px solid #1e2445;
+            display: grid;
+            grid-template-columns: 32px 1fr;
+            gap: 12px;
+            align-items: start;
+        }
+        .factor-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            background: rgba(99,102,241,0.15);
+        }
+        .factor-list h5 { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 2px; }
+        .factor-list p { font-size: 12px; color: #8892a8; line-height: 1.5; }
+
+        .source-link { color: #6366f1; text-decoration: none; font-size: 13px; }
+        .source-link:hover { text-decoration: underline; }
+        .footer { text-align: center; padding: 32px; color: #4a5068; font-size: 12px; }
+
+        @media (max-width: 1024px) {
+            .agent-card { grid-template-columns: 44px 1fr; }
+            .agent-stats { border-left: none; border-top: 1px solid #2a3055; padding-left: 0; padding-top: 16px; grid-column: 1 / -1; }
+            .chart-grid, .pattern-grid { grid-template-columns: 1fr; }
+            .summary-strip { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1><span>x402</span> Seller Agent Deep Dive</h1>
+    <p>Comprehensive analysis of every major seller agent: what they do, why AI agents pay them, pricing, endpoints, and success patterns</p>
+    <div class="nav">
+        <a href="/">Overview Dashboard</a>
+        <a href="/seller-analysis" class="active">Seller Deep Dive</a>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- Summary -->
+    <div class="summary-strip">
+        <div class="stat-card">
+            <div class="num purple">7,359</div>
+            <div class="lbl">Indexed x402 Services</div>
+        </div>
+        <div class="stat-card">
+            <div class="num green">712</div>
+            <div class="lbl">Service Providers</div>
+        </div>
+        <div class="stat-card">
+            <div class="num blue">$0.001-$0.25</div>
+            <div class="lbl">Price Range / Call</div>
+        </div>
+        <div class="stat-card">
+            <div class="num orange">90%</div>
+            <div class="lbl">Automated Agent Wallets</div>
+        </div>
+    </div>
+
+    <!-- Service Category Breakdown -->
+    <div class="chart-grid">
+        <div class="chart-box">
+            <h3>Transaction Volume by Service Category</h3>
+            <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
+        </div>
+        <div class="chart-box">
+            <h3>Pricing Distribution Across 7,359 Services</h3>
+            <div class="chart-wrap"><canvas id="pricingChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-box">
+            <h3>Why Traditional Payments Fail for Agent Commerce</h3>
+            <div class="chart-wrap"><canvas id="costComparisonChart"></canvas></div>
+        </div>
+        <div class="chart-box">
+            <h3>Service Providers by Category</h3>
+            <div class="chart-wrap"><canvas id="providerChart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- Agent-to-Agent Transaction Patterns -->
+    <div class="section">
+        <h2>Agent-to-Agent <span>Transaction Patterns</span></h2>
+        <div class="subtitle">The 5 dominant patterns driving 90%+ of agent-to-agent transaction volume</div>
+        <div class="pattern-grid">
+            <div class="pattern-card">
+                <h4 class="purple">Pattern 1: Research Agent &rarr; Data Sellers</h4>
+                <p>Research agents buy web scraping, news, and market data on-demand. Highest frequency pattern.</p>
+                <div class="flow">
+                    Agent &rarr; Firecrawl ($0.01/scrape)<br>
+                    Agent &rarr; Gloria AI ($0.03/news)<br>
+                    Agent &rarr; Minifetch ($0.002/meta)
+                </div>
+            </div>
+            <div class="pattern-card">
+                <h4 class="green">Pattern 2: Trading Agent &rarr; Intel Sellers</h4>
+                <p>DeFi/trading agents buy whale tracking, smart money signals, and risk scores before executing trades.</p>
+                <div class="flow">
+                    Agent &rarr; SLAMai ($0.001/signal)<br>
+                    Agent &rarr; Einstein AI ($0.01/query)<br>
+                    Agent &rarr; Heurist ($0.005/analysis)
+                </div>
+            </div>
+            <div class="pattern-card">
+                <h4 class="orange">Pattern 3: Content Agent &rarr; LLM Gateways</h4>
+                <p>Agents generating text, images, or audio buy inference from LLM gateways without managing API keys.</p>
+                <div class="flow">
+                    Agent &rarr; BlockRun ($0.003/call)<br>
+                    Agent &rarr; Spraay ($0.005/chat)<br>
+                    Agent &rarr; AIsa ($0.01/1K tokens)
+                </div>
+            </div>
+            <div class="pattern-card">
+                <h4 class="red">Pattern 4: DeFi Agent &rarr; Security Sellers</h4>
+                <p>Agents verify contract safety before interacting. Critical safety loop for autonomous fund management.</p>
+                <div class="flow">
+                    Agent &rarr; AgentLisa ($0.50/audit)<br>
+                    Agent &rarr; Cybercentry ($0.02/check)<br>
+                    Agent &rarr; x402-secure (risk score)
+                </div>
+            </div>
+            <div class="pattern-card">
+                <h4 class="blue">Pattern 5: Orchestrator &rarr; Specialist Agents</h4>
+                <p>Coordinator agents decompose complex tasks and hire specialist agents for each subtask.</p>
+                <div class="flow">
+                    Questflow &rarr; weather ($0.001)<br>
+                    Questflow &rarr; data ($0.005)<br>
+                    Questflow &rarr; analysis ($0.01)
+                </div>
+            </div>
+            <div class="pattern-card">
+                <h4 class="pink">Pattern 6: Trading Agent &rarr; Execution</h4>
+                <p>Agents that need to execute on-chain operations buy swap quotes, trade execution, and settlement.</p>
+                <div class="flow">
+                    Agent &rarr; Elsa swap ($0.02)<br>
+                    Agent &rarr; AEON settle (real-world)<br>
+                    Agent &rarr; Spraay batch ($0.01)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Seller Agents Deep Dive -->
+    <div class="section">
+        <h2>All Major <span>Seller Agents</span> &mdash; Deep Dive</h2>
+        <div class="subtitle">Complete breakdown of each seller: what they do, why agents call them, endpoints, and pricing</div>
+
+        <div class="agent-grid">
+
+            <!-- 1. AIsa -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-gold">1</div></div>
+                <div class="agent-info">
+                    <h3>AIsa</h3>
+                    <div class="agent-url">aisa.network</div>
+                    <div class="agent-category cat-marketplace">Marketplace / Aggregator</div>
+                    <div class="agent-desc">The world's first AI resource marketplace built natively on x402. Aggregates LLM inference, Twitter/X API, search APIs, financial data feeds, and social data through a unified endpoint. Acts as a routing and settlement layer -- agents access diverse capabilities through one API.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>An agent needing LLM reasoning + Twitter sentiment + financial data can access all three through AIsa's single endpoint without separate accounts, API keys, or subscriptions. Payment itself is authentication. The agent pays per call and gets routed to the cheapest/fastest provider automatically.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">LLM inference</span>
+                        <span class="endpoint-tag">Twitter/X API</span>
+                        <span class="endpoint-tag">Search APIs</span>
+                        <span class="endpoint-tag">Financial data</span>
+                        <span class="endpoint-tag">Social data</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Transactions</span><span class="stat-value purple">22M+</span></div>
+                    <div class="stat-row"><span class="stat-label">Network Share</span><span class="stat-value">25%+</span></div>
+                    <div class="stat-row"><span class="stat-label">Ranking</span><span class="stat-value green">#1 on x402scan</span></div>
+                    <div class="stat-row"><span class="stat-label">Chain</span><span class="stat-value sm">Base</span></div>
+                    <table class="price-table">
+                        <tr><td>LLM inference</td><td>~$0.01/1K tok</td></tr>
+                        <tr><td>Image gen</td><td>~$0.10/image</td></tr>
+                        <tr><td>Data query</td><td>~$0.005/call</td></tr>
+                    </table>
+                    <div class="stat-row"><span class="stat-label">Backers</span><span class="stat-value sm">Draper, BoostVC</span></div>
+                </div>
+            </div>
+
+            <!-- 2. AInalyst -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-silver">2</div></div>
+                <div class="agent-info">
+                    <h3>AInalyst</h3>
+                    <div class="agent-url">ainalyst.ai (Virtuals Protocol)</div>
+                    <div class="agent-category cat-data">Data Analytics</div>
+                    <div class="agent-desc">Crypto intelligence and analytics agent launched on the Virtuals Protocol. Provides on-chain analytics, market intelligence, and investment signal generation. Highest dollar-value seller in the x402 ecosystem.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Trading and portfolio agents need real-time market intelligence to make autonomous decisions. AInalyst provides structured analytics that agents can consume and act on without human filtering, generating ~$350K in total transaction value.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">Market analytics</span>
+                        <span class="endpoint-tag">Investment signals</span>
+                        <span class="endpoint-tag">On-chain data</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Total Value</span><span class="stat-value green">~$350K</span></div>
+                    <div class="stat-row"><span class="stat-label">Transactions</span><span class="stat-value">493K</span></div>
+                    <div class="stat-row"><span class="stat-label">Avg per Tx</span><span class="stat-value sm">$0.71</span></div>
+                    <div class="stat-row"><span class="stat-label">Ranking</span><span class="stat-value sm">#1 by dollar value</span></div>
+                </div>
+            </div>
+
+            <!-- 3. Heurist Mesh -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-bronze">3</div></div>
+                <div class="agent-info">
+                    <h3>Heurist Mesh</h3>
+                    <div class="agent-url">heurist.ai</div>
+                    <div class="agent-category cat-ai">Composable AI Skills</div>
+                    <div class="agent-desc">Library of 40+ specialized, modular AI agents with 100+ tools across 25 data providers. Each agent is a purpose-built module for a specific blockchain/crypto task. Agents include: CoinGecko Token Info, DexScreener, Whale Tracker, Arkham Intelligence, Allora Price Prediction, Etherscan, DeFiLlama, and more.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Instead of integrating with dozens of data providers separately, a crypto agent calls Heurist agents as composable building blocks. Chain: Token Resolver &rarr; DexScreener &rarr; Whale Tracker &rarr; Price Prediction -- all through x402 micropayments. Modular composition is the key differentiator.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">40 agents</span>
+                        <span class="endpoint-tag">100+ tools</span>
+                        <span class="endpoint-tag">Token info</span>
+                        <span class="endpoint-tag">Whale tracking</span>
+                        <span class="endpoint-tag">DEX analytics</span>
+                        <span class="endpoint-tag">Price prediction</span>
+                        <span class="endpoint-tag">DeFi TVL</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Agents</span><span class="stat-value purple">40</span></div>
+                    <div class="stat-row"><span class="stat-label">Tools</span><span class="stat-value">100+</span></div>
+                    <div class="stat-row"><span class="stat-label">Data Providers</span><span class="stat-value sm">25</span></div>
+                    <table class="price-table">
+                        <tr><td>MEV scanner</td><td>$0.01</td></tr>
+                        <tr><td>ENS lookup</td><td>$0.001</td></tr>
+                        <tr><td>Token analysis</td><td>$0.005</td></tr>
+                    </table>
+                    <div class="stat-row"><span class="stat-label">Token</span><span class="stat-value sm">HEU (~$10M mcap)</span></div>
+                </div>
+            </div>
+
+            <!-- 4. AgentLisa -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">4</div></div>
+                <div class="agent-info">
+                    <h3>AgentLISA</h3>
+                    <div class="agent-url">agentlisa.ai</div>
+                    <div class="agent-category cat-security">Smart Contract Security</div>
+                    <div class="agent-desc">AI-powered smart contract security analyzer using a multi-agent system to detect business-logic vulnerabilities that static analyzers miss. Detects 9/10 OWASP vulnerabilities vs 5/10 for traditional tools. Also launching PaymentShield for x402 payment infrastructure security.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Before depositing funds into a DeFi protocol or interacting with an unfamiliar contract, an agent pays $0.50-$5.00 to verify it's not malicious. This is the "security checkpoint" for autonomous agents managing real money. 99% cheaper than traditional audits ($10K-$100K+).</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">POST /scan</span>
+                        <span class="endpoint-tag">GET /results</span>
+                        <span class="endpoint-tag">PaymentShield (Q1 2026)</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Day-1 Users</span><span class="stat-value green">3,578</span></div>
+                    <div class="stat-row"><span class="stat-label">Day-1 Revenue</span><span class="stat-value">$3,100</span></div>
+                    <div class="stat-row"><span class="stat-label">Day-1 Txns</span><span class="stat-value sm">1,960</span></div>
+                    <div class="stat-row"><span class="stat-label">Ranking</span><span class="stat-value sm">#4 on x402scan (24h)</span></div>
+                    <table class="price-table">
+                        <tr><td>Simple scan</td><td>$0.50</td></tr>
+                        <tr><td>Complex scan</td><td>$5.00</td></tr>
+                        <tr><td>Settlement</td><td>~2 sec (Base)</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 5. Firecrawl -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">5</div></div>
+                <div class="agent-info">
+                    <h3>Firecrawl</h3>
+                    <div class="agent-url">firecrawl.dev</div>
+                    <div class="agent-category cat-data">Web Scraping</div>
+                    <div class="agent-desc">Established web scraping API that converts any website into LLM-ready structured data. The most prominent "Web2" company to adopt x402. The x402 endpoint allows wallet-equipped agents to scrape without accounts. Featured as a Coinbase x402 case study.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Web access is foundational for AI agents. An agent researching topics, monitoring competitors, or gathering news pays $0.01 per search and gets clean, structured results. No signup, no API key management -- just pay and scrape. Validates x402 for non-crypto-native companies.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">POST /v1/x402/search</span>
+                        <span class="endpoint-tag">Location-aware search</span>
+                        <span class="endpoint-tag">PDF parsing</span>
+                        <span class="endpoint-tag">Structured extraction</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value sm">Experimental x402</span></div>
+                    <div class="stat-row"><span class="stat-label">Validation</span><span class="stat-value sm green">Coinbase case study</span></div>
+                    <table class="price-table">
+                        <tr><td>Search (x402)</td><td>$0.01</td></tr>
+                        <tr><td>Sub plan (compare)</td><td>$16-399/mo</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 6. BlockRun.AI -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">6</div></div>
+                <div class="agent-info">
+                    <h3>BlockRun.AI</h3>
+                    <div class="agent-url">blockrun.ai</div>
+                    <div class="agent-category cat-gateway">Universal LLM Gateway</div>
+                    <div class="agent-desc">Dual-purpose LLM gateway with ClawRouter -- an open-source smart routing engine using a 14-dimension weighted scoring system to select the cheapest capable model. 7-layer compression pipeline reduces token usage by 15-40%. Supports 30+ models from OpenAI, Anthropic, Google, DeepSeek, xAI, Meta, Mistral.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>An agent with a wallet can immediately access any of 30+ LLMs -- no API keys, no credit cards, no accounts. ClawRouter auto-selects the optimal model: cheap models for simple tasks, powerful models for complex ones. Claims 78% cost savings vs direct provider access. Payment = authentication.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">OpenAI-compatible API</span>
+                        <span class="endpoint-tag">30+ models</span>
+                        <span class="endpoint-tag">Smart routing</span>
+                        <span class="endpoint-tag">Python/TS/Go SDKs</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Models</span><span class="stat-value blue">30+</span></div>
+                    <div class="stat-row"><span class="stat-label">Cost Savings</span><span class="stat-value green">78%</span></div>
+                    <div class="stat-row"><span class="stat-label">Markup</span><span class="stat-value sm">Provider + 5%</span></div>
+                    <table class="price-table">
+                        <tr><td>GPT-5.2 (1M tok in)</td><td>$1.75</td></tr>
+                        <tr><td>Claude Opus 4.5</td><td>$5.00</td></tr>
+                        <tr><td>DeepSeek V3.2</td><td>$0.28</td></tr>
+                        <tr><td>Gemini 2.5 Pro</td><td>$1.25</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 7. Elsa x402 -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">7</div></div>
+                <div class="agent-info">
+                    <h3>Elsa x402</h3>
+                    <div class="agent-url">x402.heyelsa.ai</div>
+                    <div class="agent-category cat-defi">DeFi Trading API</div>
+                    <div class="agent-desc">First x402-enabled API purpose-built for crypto trading and DeFi. Provides multi-chain balance aggregation, DeFi position tracking, risk metrics across 15+ mainnets, AND actual trade execution (swaps, limit orders, perpetuals). Full lifecycle: read data &rarr; analyze &rarr; execute.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>A trading agent needs both intelligence (prices, P&L, wallet analysis) and execution (swaps, limit orders) in one interface. Elsa provides the complete stack from $0.001 analytics to $0.020 trade execution, with safety features like dry-run-by-default and slippage protection.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">search_token</span>
+                        <span class="endpoint-tag">get_balances</span>
+                        <span class="endpoint-tag">analyze_wallet</span>
+                        <span class="endpoint-tag">execute_swap</span>
+                        <span class="endpoint-tag">create_limit_order</span>
+                        <span class="endpoint-tag">get_pnl_report</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Chains</span><span class="stat-value purple">15+</span></div>
+                    <div class="stat-row"><span class="stat-label">Response Time</span><span class="stat-value sm">~1 sec avg</span></div>
+                    <table class="price-table">
+                        <tr><td>search_token</td><td>$0.001</td></tr>
+                        <tr><td>get_balances</td><td>$0.005</td></tr>
+                        <tr><td>get_portfolio</td><td>$0.010</td></tr>
+                        <tr><td>execute_swap</td><td>$0.020</td></tr>
+                        <tr><td>limit_order</td><td>$0.020</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 8. Enrichx402 -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">8</div></div>
+                <div class="agent-info">
+                    <h3>Enrichx402 (StableEnrich)</h3>
+                    <div class="agent-url">enrichx402.com</div>
+                    <div class="agent-category cat-data">Data Enrichment</div>
+                    <div class="agent-desc">Unifies 6 premium data sources (Apollo, Exa, Firecrawl, Google Maps, Grok, Whitepages) behind a single pay-per-request interface. No need to manage separate accounts or API keys for each provider. On-chain billing on Base.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>An agent doing lead research or competitive analysis accesses 6 premium data providers through one payment. No separate signups, no API key rotation, no upfront credits. Pay $0.015 per enrichment call and get the exact data point needed.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">People (Apollo)</span>
+                        <span class="endpoint-tag">Search (Exa)</span>
+                        <span class="endpoint-tag">Scraping (Firecrawl)</span>
+                        <span class="endpoint-tag">Places (Google Maps)</span>
+                        <span class="endpoint-tag">Social (Grok)</span>
+                        <span class="endpoint-tag">Contacts (Whitepages)</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <table class="price-table">
+                        <tr><td>People enrichment</td><td>$0.015</td></tr>
+                        <tr><td>Web search</td><td>$0.015</td></tr>
+                        <tr><td>Web scraping</td><td>$0.015</td></tr>
+                        <tr><td>Places/location</td><td>$0.045</td></tr>
+                        <tr><td>Social media</td><td>$0.015</td></tr>
+                        <tr><td>Contact info</td><td>$0.030</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 9. Spraay -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">9</div></div>
+                <div class="agent-info">
+                    <h3>Spraay x402 Gateway</h3>
+                    <div class="agent-url">spraay.io</div>
+                    <div class="agent-category cat-gateway">AI + DeFi Gateway</div>
+                    <div class="agent-desc">Pay-per-request gateway combining 200+ AI models with DeFi operations. Agents access LLM chat, batch USDC payments, Uniswap V3 swap quotes, token prices, ENS resolution, and wallet balances -- all through 9 x402 endpoints on a single MCP server.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Combines AI reasoning and on-chain execution in one gateway. An agent can reason about a trade (spraay_chat), check prices (spraay_prices), get a swap quote (spraay_swap_quote), and execute a batch payment (spraay_batch_execute) without switching providers.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">spraay_chat</span>
+                        <span class="endpoint-tag">spraay_models</span>
+                        <span class="endpoint-tag">spraay_swap_quote</span>
+                        <span class="endpoint-tag">spraay_batch_execute</span>
+                        <span class="endpoint-tag">spraay_prices</span>
+                        <span class="endpoint-tag">spraay_balances</span>
+                        <span class="endpoint-tag">spraay_resolve</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Models</span><span class="stat-value blue">200+</span></div>
+                    <div class="stat-row"><span class="stat-label">Endpoints</span><span class="stat-value">9</span></div>
+                    <table class="price-table">
+                        <tr><td>AI chat</td><td>$0.005</td></tr>
+                        <tr><td>List models</td><td>$0.001</td></tr>
+                        <tr><td>Swap quote</td><td>$0.002</td></tr>
+                        <tr><td>Batch execute</td><td>$0.010</td></tr>
+                        <tr><td>Token prices</td><td>$0.002</td></tr>
+                        <tr><td>ENS resolve</td><td>$0.001</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 10. Gloria AI -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">10</div></div>
+                <div class="agent-info">
+                    <h3>Gloria AI</h3>
+                    <div class="agent-url">itsgloria.ai</div>
+                    <div class="agent-category cat-news">Real-Time News Intel</div>
+                    <div class="agent-desc">Low-latency, structured, programmable news intelligence across crypto, macro, and tech domains. Filters for relevance to deliver only high-signal, market-moving intelligence. Recognized by Coinbase Developer Platform for full x402 integration.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>A trading agent needs machine-readable market intelligence to make autonomous decisions. Gloria delivers structured news feeds that agents consume, interpret, and act on -- not human-readable articles but categorized data points for algorithmic trading stacks.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">News API</span>
+                        <span class="endpoint-tag">Ticker Summary</span>
+                        <span class="endpoint-tag">News by Keyword</span>
+                        <span class="endpoint-tag">Recaps API</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Recognition</span><span class="stat-value sm green">Coinbase spotlight</span></div>
+                    <table class="price-table">
+                        <tr><td>News API</td><td>$0.030</td></tr>
+                        <tr><td>Ticker summary</td><td>$0.031</td></tr>
+                        <tr><td>Keyword search</td><td>$0.050</td></tr>
+                        <tr><td>Recaps (12-24h)</td><td>$0.100</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 11. Einstein AI -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">11</div></div>
+                <div class="agent-info">
+                    <h3>Einstein AI</h3>
+                    <div class="agent-url">einstein.ai</div>
+                    <div class="agent-category cat-intel">Blockchain Intelligence</div>
+                    <div class="agent-desc">AI-powered blockchain analytics with 23 distinct x402 endpoints. Covers whale tracking, smart money signals, DEX analytics, MEV detection, launchpad monitoring, security audits, and investment reports. Broadest endpoint coverage of any single x402 seller.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Before executing a trade, an agent queries whale movements, checks smart money signals, reviews MEV risk, and validates contract security -- all from one provider. 23 granular endpoints mean agents pay only for the specific intelligence they need.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">23 endpoints</span>
+                        <span class="endpoint-tag">Whale tracking</span>
+                        <span class="endpoint-tag">Smart money</span>
+                        <span class="endpoint-tag">MEV detection</span>
+                        <span class="endpoint-tag">Launchpad monitoring</span>
+                        <span class="endpoint-tag">Security audits</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Endpoints</span><span class="stat-value purple">23</span></div>
+                    <div class="stat-row"><span class="stat-label">Chains</span><span class="stat-value sm">Base, Solana</span></div>
+                    <div class="stat-row"><span class="stat-label">Pricing</span><span class="stat-value sm">Cents/query</span></div>
+                </div>
+            </div>
+
+            <!-- 12. x402-secure -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">12</div></div>
+                <div class="agent-info">
+                    <h3>x402-secure</h3>
+                    <div class="agent-url">x402secure.com (by t54.ai)</div>
+                    <div class="agent-category cat-security">Payment Security Layer</div>
+                    <div class="agent-desc">Open-source SDK and proxy adding a security layer on top of x402 payments. Wraps AI agent calls to collect risk signals (context traces, prompts, tool calls, environment). Trustline Validator Agent Network provides low/medium/high risk ratings per transaction. Addresses: prompt injection, counterfeit products, hidden auto-renewals, tool tampering, spec variations, review manipulation.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Dispute protection for autonomous agents. If a transaction is later disputed, x402-secure provides the evidence trail proving the agent acted reasonably. Drop-in integration: sellers change facilitator URL, buyers add a few SDK lines. The trust infrastructure the ecosystem needs.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">Risk scoring API</span>
+                        <span class="endpoint-tag">Trustline validator</span>
+                        <span class="endpoint-tag">Context trace collection</span>
+                        <span class="endpoint-tag">Dashboard</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">SDK</span><span class="stat-value sm green">Open-source (pip)</span></div>
+                    <div class="stat-row"><span class="stat-label">Integration</span><span class="stat-value sm">Drop-in proxy</span></div>
+                    <div class="stat-row"><span class="stat-label">Threats Covered</span><span class="stat-value sm">6 attack types</span></div>
+                </div>
+            </div>
+
+            <!-- 13. Cybercentry -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">13</div></div>
+                <div class="agent-info">
+                    <h3>Cybercentry</h3>
+                    <div class="agent-url">cybercentry.io</div>
+                    <div class="agent-category cat-security">Security Verification</div>
+                    <div class="agent-desc">AI-powered security verification endpoints across three pillars: Compliance, Intelligence, and Protection. Covers Ethereum and Solana tokens, Solidity code, wallet risk profiles, web app security, and private data integrity -- all at a flat $0.02/request.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Before signing any transaction, an agent verifies the target. Token legit? Contract safe? Wallet clean? At $0.02 per check, this replaces "$5K/month security retainers" with per-use verification. 99% uptime, ~1 sec response.</p>
+                    </div>
+                    <div class="endpoints">
+                        <span class="endpoint-tag">ETH token verify</span>
+                        <span class="endpoint-tag">SOL token verify</span>
+                        <span class="endpoint-tag">Solidity audit</span>
+                        <span class="endpoint-tag">Wallet verify</span>
+                        <span class="endpoint-tag">Web app verify</span>
+                        <span class="endpoint-tag">Data verify</span>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <table class="price-table">
+                        <tr><td>All endpoints</td><td>$0.02 flat</td></tr>
+                        <tr><td>Uptime</td><td>99%</td></tr>
+                        <tr><td>vs retainers</td><td>replaces $5K/mo</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 14-21: Remaining sellers -->
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">14</div></div>
+                <div class="agent-info">
+                    <h3>SLAMai</h3>
+                    <div class="agent-url">slamai.xyz</div>
+                    <div class="agent-category cat-intel">Smart Money Intelligence</div>
+                    <div class="agent-desc">Real-time on-chain analytics with WalletDNA profiling across 25+ chains. Tracks whale movements, fund flows, DEX analytics, MEV detection. The WalletDNA feature profiles wallets by behavioral patterns, not just holdings.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Trading agents follow smart money. SLAMai's WalletDNA tells them not just WHAT a whale bought, but whether that wallet's pattern indicates informed trading vs random activity. Signal vs noise differentiation at $0.001/query.</p>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Chains</span><span class="stat-value purple">25+</span></div>
+                    <div class="stat-row"><span class="stat-label">Min Price</span><span class="stat-value sm green">$0.001</span></div>
+                    <div class="stat-row"><span class="stat-label">Unique Feature</span><span class="stat-value sm">WalletDNA</span></div>
+                </div>
+            </div>
+
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">15</div></div>
+                <div class="agent-info">
+                    <h3>AEON</h3>
+                    <div class="agent-url">aeon.xyz</div>
+                    <div class="agent-category cat-infra">Omnichain Settlement</div>
+                    <div class="agent-desc">Crypto settlement layer connecting AI agents to 50M+ real-world merchants worldwide. Bridges on-chain agent payments to physical-world commerce via QR payments (Philippines), Pix (Brazil), and local rails in SE Asia, Africa, Latin America.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>The only x402 facilitator bridging digital agent payments to physical-world merchant networks. An agent can pay a real-world vendor using USDC, settled through AEON's omnichain infrastructure. $29M+ in total volume, 994K transactions.</p>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Volume</span><span class="stat-value green">$29M+</span></div>
+                    <div class="stat-row"><span class="stat-label">Transactions</span><span class="stat-value">994K</span></div>
+                    <div class="stat-row"><span class="stat-label">x402 Tx</span><span class="stat-value sm">36,900+</span></div>
+                    <div class="stat-row"><span class="stat-label">Merchants</span><span class="stat-value sm">50M+</span></div>
+                </div>
+            </div>
+
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">16</div></div>
+                <div class="agent-info">
+                    <h3>Pinata</h3>
+                    <div class="agent-url">pinata.cloud</div>
+                    <div class="agent-category cat-storage">IPFS Storage</div>
+                    <div class="agent-desc">Leading IPFS pinning service. First platform to ship x402 v1 in production. Enables account-free IPFS uploads -- any agent uploads files (public or private) with a single HTTP call + USDC payment. Also supports file monetization: gate content behind x402 payments.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Agents generating content, reports, or data need permanent, decentralized storage. Upload to IPFS in one HTTP call with no account. The file monetization feature means agents can also SELL content stored on IPFS via x402.</p>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value sm green">First x402 v1 prod</span></div>
+                    <table class="price-table">
+                        <tr><td>Pin (public)</td><td>$0.10/GB</td></tr>
+                        <tr><td>Pin (private)</td><td>$0.10/GB</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">17</div></div>
+                <div class="agent-info">
+                    <h3>Neynar</h3>
+                    <div class="agent-url">neynar.com</div>
+                    <div class="agent-category cat-social">Farcaster Social Data</div>
+                    <div class="agent-desc">Dominant infrastructure provider for Farcaster (decentralized social protocol). Provides real-time APIs for user data, social graphs, casts, channels, verifications, and reputation scoring. Missing API key header auto-falls back to x402 pay-per-request.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>THE data source for Farcaster. Social agents need social graph data, post history, and reputation scores. x402 fallback means any wallet-equipped agent accesses the full Farcaster data stack without an account. No comparable alternative exists.</p>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Moat</span><span class="stat-value sm orange">Monopoly on Farcaster</span></div>
+                    <div class="stat-row"><span class="stat-label">Integration</span><span class="stat-value sm">Auto-fallback to x402</span></div>
+                </div>
+            </div>
+
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">18</div></div>
+                <div class="agent-info">
+                    <h3>AdEx AURA API</h3>
+                    <div class="agent-url">adex.network</div>
+                    <div class="agent-category cat-defi">DeFi Portfolio Intelligence</div>
+                    <div class="agent-desc">AI-powered Web3 agent that analyzes on-chain history, assesses risk profiles, and develops personalized DeFi strategies. Open-source. Agent sends a wallet address, receives actionable strategies with specific protocols, APYs, and risk ratings.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Portfolio management agents need to go beyond raw data. AURA provides the intelligence layer: "Based on this wallet's holdings and risk profile, here are 3 DeFi strategies with specific protocol recommendations." Hackathon with $12K prize pool validated adoption.</p>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Hackathon</span><span class="stat-value sm green">$12K prize, 8 winners</span></div>
+                    <div class="stat-row"><span class="stat-label">Coverage</span><span class="stat-value sm">All EVM chains</span></div>
+                    <div class="stat-row"><span class="stat-label">License</span><span class="stat-value sm">Open-source</span></div>
+                </div>
+            </div>
+
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">19</div></div>
+                <div class="agent-info">
+                    <h3>dTelecom STT</h3>
+                    <div class="agent-url">dtelecom.org</div>
+                    <div class="agent-category cat-voice">Speech-to-Text</div>
+                    <div class="agent-desc">Production-grade real-time speech-to-text on decentralized infrastructure (DePIN on Solana). Dual-engine: NVIDIA Parakeet-TDT + OpenAI Whisper with smart routing. 99+ languages. Includes VAD, noise reduction, speech validation, and hallucination filtering.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Voice-enabled agents, meeting transcription bots, and customer service agents need STT. At $0.005/minute with no subscription, ideal for bursty workloads. Hallucination filtering is critical for agents that need reliable transcriptions for downstream decisions.</p>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Languages</span><span class="stat-value purple">99+</span></div>
+                    <div class="stat-row"><span class="stat-label">Engines</span><span class="stat-value sm">Parakeet + Whisper</span></div>
+                    <table class="price-table">
+                        <tr><td>Transcription</td><td>$0.005/min</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">20</div></div>
+                <div class="agent-info">
+                    <h3>Minifetch</h3>
+                    <div class="agent-url">minifetch.com</div>
+                    <div class="agent-category cat-data">Web Metadata Extraction</div>
+                    <div class="agent-desc">Composable extraction APIs for fetching rich metadata and links from web pages. Built on battle-tested npm packages (3.6M+ downloads over 10+ years). Ethical scraping: respects robots.txt, rate limiting. Supports Base and Solana for payments.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>Agents building knowledge bases or running RAG pipelines need structured metadata from URLs at scale. At $0.002 per extraction (500 URLs for $1.00), with ethical scraping built in, it's the cheapest reliable metadata source. Free URL-check endpoint for pre-validation.</p>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <table class="price-table">
+                        <tr><td>URL metadata</td><td>$0.002</td></tr>
+                        <tr><td>URL links</td><td>$0.002</td></tr>
+                        <tr><td>URL check</td><td>FREE</td></tr>
+                    </table>
+                    <div class="stat-row"><span class="stat-label">Foundation</span><span class="stat-value sm">3.6M+ npm downloads</span></div>
+                </div>
+            </div>
+
+            <div class="agent-card">
+                <div class="agent-rank"><div class="rank-badge rank-normal">21</div></div>
+                <div class="agent-info">
+                    <h3>x402engine</h3>
+                    <div class="agent-url">x402engine.app</div>
+                    <div class="agent-category cat-marketplace">Multi-Category API Hub</div>
+                    <div class="agent-desc">60 pay-per-call APIs spanning 28 categories: 30 LLM models, image generation, web scraping, crypto price feeds, IPFS storage, code execution (sandboxed), text-to-speech, embeddings, and transaction simulation. The most endpoint-dense single seller.</div>
+                    <div class="why-box">
+                        <div class="why-label">Why agents pay for this</div>
+                        <p>One-stop-shop for agents needing diverse capabilities without managing 30 separate integrations. 60 endpoints means an agent can scrape ($0.005), reason ($0.002-$0.25), store ($0.01), generate images ($0.015-$0.12), and simulate transactions ($0.01) in a single session.</p>
+                    </div>
+                </div>
+                <div class="agent-stats">
+                    <div class="stat-row"><span class="stat-label">Endpoints</span><span class="stat-value orange">60</span></div>
+                    <div class="stat-row"><span class="stat-label">LLM Models</span><span class="stat-value sm">30</span></div>
+                    <table class="price-table">
+                        <tr><td>Embeddings</td><td>$0.001</td></tr>
+                        <tr><td>Code execution</td><td>$0.005</td></tr>
+                        <tr><td>Web scrape</td><td>$0.005</td></tr>
+                        <tr><td>Image gen</td><td>$0.015-0.12</td></tr>
+                        <tr><td>LLM (premium)</td><td>$0.09-0.25</td></tr>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- What Makes Sellers Successful -->
+    <div class="section">
+        <h2>What Makes Seller Agents <span>Successful</span></h2>
+        <div class="subtitle">7 patterns shared by the highest-volume sellers in the x402 ecosystem</div>
+        <ul class="factor-list">
+            <li>
+                <div class="factor-icon">1</div>
+                <div>
+                    <h5 class="purple">Sub-Cent Pricing Sweet Spot</h5>
+                    <p>3,500+ services (the largest bracket) price between $0.001-$0.01 per call. This was impossible with credit cards ($0.30 fixed fee). x402 settlement on Base costs ~$0.0001, making penny transactions profitable. Top sellers like Minifetch ($0.002) and SLAMai ($0.001) thrive here.</p>
+                </div>
+            </li>
+            <li>
+                <div class="factor-icon">2</div>
+                <div>
+                    <h5 class="green">Payment = Authentication (Zero Friction)</h5>
+                    <p>The most successful sellers require ZERO setup: no accounts, no API keys, no OAuth flows, no KYC. The agent's USDC payment IS the authentication. AIsa, BlockRun, and Firecrawl all follow this pattern -- any wallet-equipped agent can start using the service immediately.</p>
+                </div>
+            </li>
+            <li>
+                <div class="factor-icon">3</div>
+                <div>
+                    <h5 class="blue">Machine-Readable Output</h5>
+                    <p>Top sellers return structured, machine-consumable data -- not human-readable pages. Gloria AI returns categorized news signals for trading stacks. Heurist returns composable data objects. Elsa returns typed portfolio analytics. Agents can act on the output without parsing.</p>
+                </div>
+            </li>
+            <li>
+                <div class="factor-icon">4</div>
+                <div>
+                    <h5 class="orange">Discoverability via x402 Bazaar</h5>
+                    <p>Successful sellers set <code>discoverable: true</code> in route config, include <code>mimeType</code> and <code>outputSchema</code> descriptions, and list on x402scan, x402list.fun, and x402.org ecosystem directory. Agents programmatically find and evaluate services before buying.</p>
+                </div>
+            </li>
+            <li>
+                <div class="factor-icon">5</div>
+                <div>
+                    <h5 class="pink">Aggregation Over Specialization</h5>
+                    <p>The two highest-volume sellers (AIsa at 22M+ tx, x402engine at 60 endpoints) are aggregators. They bundle diverse capabilities behind one payment interface. Agents prefer one provider for 10 tasks over 10 providers for 1 task each -- fewer integrations, fewer wallets to manage.</p>
+                </div>
+            </li>
+            <li>
+                <div class="factor-icon">6</div>
+                <div>
+                    <h5 class="red">Safety-Critical Services Command Premium Pricing</h5>
+                    <p>AgentLisa charges $0.50-$5.00/scan (100x more than data queries) because the service is safety-critical: agents MUST verify contracts before depositing funds. Cybercentry, x402-secure, and BlackSwan occupy the same "must-have" category. Security = inelastic demand.</p>
+                </div>
+            </li>
+            <li>
+                <div class="factor-icon">7</div>
+                <div>
+                    <h5 class="yellow">Near-Zero Artificial Activity</h5>
+                    <p>Artemis research shows 47% of all x402 transactions are teams gaming leaderboards. The top legitimate sellers (AIsa, x402-secure, LucyOS, AgentLisa, Heurist) are distinguished by millions of micropayments with near-zero artificial activity -- real utility, not inflated metrics.</p>
+                </div>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Sources -->
+    <div class="section">
+        <h2>Data <span>Sources</span></h2>
+        <p style="color: #8892a8; font-size: 13px; line-height: 2;">
+            <a class="source-link" href="https://www.x402scan.com/" target="_blank">x402scan.com</a> &mdash; Live ecosystem explorer with seller rankings and transaction data<br>
+            <a class="source-link" href="https://www.x402.org/ecosystem" target="_blank">x402.org/ecosystem</a> &mdash; Official ecosystem directory (100+ projects)<br>
+            <a class="source-link" href="https://x402list.fun" target="_blank">x402list.fun</a> &mdash; Service directory with 7,359 indexed services and volume data<br>
+            <a class="source-link" href="https://www.bankless.com/read/x402-v2-and-the-road-to-agentic-commerce" target="_blank">Bankless</a> &mdash; Artemis analysis of legitimate vs gamed transactions<br>
+            <a class="source-link" href="https://mementoresearch.com/inside-x402-mapping-the-first-wave-of-agent-payments" target="_blank">Memento Research</a> &mdash; First-wave agent payment mapping<br>
+            <a class="source-link" href="https://www.bitget.site/news/detail/12560605087071" target="_blank">Bitget News</a> &mdash; AIsa 22M+ transaction milestone<br>
+            <a class="source-link" href="https://agentlisa.ai/blog/post/x402-payment-api-launch" target="_blank">AgentLisa Blog</a> &mdash; Launch day metrics (3,578 users, $3,100 revenue)<br>
+            <a class="source-link" href="https://www.coinbase.com/developer-platform/discover/case-studies/firecrawl" target="_blank">Coinbase</a> &mdash; Firecrawl x402 case study<br>
+            <a class="source-link" href="https://blockrun.ai" target="_blank">BlockRun.AI</a> &mdash; ClawRouter documentation and pricing<br>
+            <a class="source-link" href="https://gloriaai.gitbook.io/gloria/gloria-data-platform/x402-integration" target="_blank">Gloria AI Docs</a> &mdash; x402 integration and endpoint pricing<br>
+            <a class="source-link" href="https://x402engine.app/" target="_blank">x402engine</a> &mdash; 60 endpoint marketplace with live pricing<br>
+            <a class="source-link" href="https://enrichx402.com/" target="_blank">Enrichx402</a> &mdash; Data enrichment endpoint pricing<br>
+            <a class="source-link" href="https://x402.heyelsa.ai/" target="_blank">Elsa x402</a> &mdash; DeFi trading API documentation<br>
+            <a class="source-link" href="https://glama.ai/mcp/servers/@plagtech/spraay-x402-mcp" target="_blank">Spraay MCP</a> &mdash; Gateway endpoints and pricing<br>
+            <a class="source-link" href="https://cybercentry.gitbook.io/cybercentry" target="_blank">Cybercentry Docs</a> &mdash; Security verification endpoints<br>
+            <a class="source-link" href="https://pinata.cloud/blog/pay-to-pin-on-ipfs-with-x402/" target="_blank">Pinata Blog</a> &mdash; First x402 v1 production implementation<br>
+            <a class="source-link" href="https://neynar.com/blog/agents-frames-and-the-future-of-farcaster-neynar-s-vision-for-x402" target="_blank">Neynar Blog</a> &mdash; Farcaster x402 integration<br>
+            <a class="source-link" href="https://www.prnewswire.com/news-releases/aeon-releases-x402-sdk-v2-on-bnb-chain-enabling-native-ai-payment-integration-302604169.html" target="_blank">PR Newswire</a> &mdash; AEON $29M volume and SDK V2
+        </p>
+        <p style="color: #4a5068; font-size: 11px; margin-top: 12px;">
+            Pricing data verified from official documentation and live endpoints where available. Transaction volumes from x402scan.com, x402list.fun, and public reports. Data as of Feb 2026.
+        </p>
+    </div>
+
+</div>
+
+<div class="footer">
+    x402 Seller Agent Deep Dive &mdash; Generated Feb 2026 &mdash; Data from x402scan.com, x402list.fun, x402.org, and public reports
+</div>
+
+<script>
+    const C = {
+        purple: '#6366f1', green: '#34d399', blue: '#60a5fa', orange: '#fb923c',
+        pink: '#f472b6', yellow: '#fbbf24', red: '#f87171', grid: '#1e2445', text: '#6b7590'
+    };
+    Chart.defaults.color = C.text;
+    Chart.defaults.borderColor = C.grid;
+
+    // Category Volume Chart
+    new Chart(document.getElementById('categoryChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Data Analytics', 'Developer Tools', 'AI/ML', 'DeFi & Trading', 'Storage Infra', 'Identity & Auth', 'NFT Services'],
+            datasets: [{
+                label: 'Transactions (Millions)',
+                data: [17.8, 11.8, 7.6, 6.6, 5.2, 3.0, 1.3],
+                backgroundColor: [C.purple, C.blue, C.green, C.pink, C.orange, C.yellow, '#374151'],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => `${ctx.parsed.x}M transactions` } }
+            },
+            scales: {
+                x: { ticks: { callback: v => v + 'M' }, grid: { color: C.grid } },
+                y: { grid: { display: false } }
+            }
+        }
+    });
+
+    // Pricing Distribution
+    new Chart(document.getElementById('pricingChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['< $0.001 (371)', '$0.001 - $0.01 (3,500)', '$0.01 - $0.10 (2,600)', '> $0.10 (874)'],
+            datasets: [{
+                data: [371, 3500, 2600, 874],
+                backgroundColor: [C.green, C.purple, C.blue, C.orange],
+                borderColor: '#0a0e1a',
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '50%',
+            plugins: {
+                legend: { position: 'right', labels: { padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
+                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed} services` } }
+            }
+        }
+    });
+
+    // Cost Comparison
+    new Chart(document.getElementById('costComparisonChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Credit Card\nFixed Fee', 'Typical x402\nSettlement (Base)', 'Cheapest x402\nAPI Call', 'Median x402\nAPI Call', 'Premium x402\nAPI Call'],
+            datasets: [{
+                label: 'Cost (USD)',
+                data: [0.30, 0.0001, 0.001, 0.01, 0.25],
+                backgroundColor: [C.red, C.green, C.green, C.blue, C.orange],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => `$${ctx.parsed.y}` } },
+                title: {
+                    display: true,
+                    text: 'Credit cards make sub-$10 transactions irrational. x402 makes sub-$0.01 profitable.',
+                    color: '#8892a8',
+                    font: { size: 11, weight: 'normal' },
+                    padding: { bottom: 16 }
+                }
+            },
+            scales: {
+                y: {
+                    type: 'logarithmic',
+                    ticks: { callback: v => '$' + v },
+                    grid: { color: C.grid }
+                },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // Provider Count
+    new Chart(document.getElementById('providerChart'), {
+        type: 'bar',
+        data: {
+            labels: ['DeFi & Trading', 'Data Analytics', 'NFT Services', 'Developer Tools', 'AI/ML', 'Identity & Auth'],
+            datasets: [{
+                label: 'Number of Providers',
+                data: [149, 99, 85, 81, 29, 25],
+                backgroundColor: [C.pink, C.purple, '#374151', C.blue, C.green, C.yellow],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => `${ctx.parsed.x} providers` } }
+            },
+            scales: {
+                x: { grid: { color: C.grid } },
+                y: { grid: { display: false } }
+            }
+        }
+    });
+</script>
+
+</body>
+</html>

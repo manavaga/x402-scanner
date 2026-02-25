@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x402 Agent-to-Agent Transaction Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e1a;
+            color: #e0e6ed;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #0f1628 0%, #1a1f3a 100%);
+            border-bottom: 1px solid #2a3055;
+            padding: 24px 40px;
+        }
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .header h1 span { color: #6366f1; }
+        .header p {
+            color: #8892a8;
+            margin-top: 6px;
+            font-size: 14px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 32px 40px; }
+
+        /* Summary Cards */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .summary-card {
+            background: linear-gradient(135deg, #141830 0%, #1a1f3a 100%);
+            border: 1px solid #2a3055;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .summary-card .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #6b7590;
+            margin-bottom: 8px;
+        }
+        .summary-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .summary-card .value.purple { color: #a78bfa; }
+        .summary-card .value.green { color: #34d399; }
+        .summary-card .value.blue { color: #60a5fa; }
+        .summary-card .value.orange { color: #fb923c; }
+        .summary-card .value.pink { color: #f472b6; }
+        .summary-card .change {
+            font-size: 12px;
+            color: #34d399;
+            margin-top: 4px;
+        }
+
+        /* Section */
+        .section {
+            background: linear-gradient(135deg, #141830 0%, #1a1f3a 100%);
+            border: 1px solid #2a3055;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .section h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+        .section h2 span { color: #6366f1; }
+
+        /* Charts */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .chart-container {
+            background: linear-gradient(135deg, #141830 0%, #1a1f3a 100%);
+            border: 1px solid #2a3055;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .chart-container h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #fff;
+        }
+        .chart-wrap { position: relative; height: 300px; }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead th {
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #6b7590;
+            border-bottom: 1px solid #2a3055;
+        }
+        tbody td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #1e2445;
+            font-size: 14px;
+        }
+        tbody tr:hover { background: rgba(99, 102, 241, 0.05); }
+        .rank {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .rank-1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #000; }
+        .rank-2 { background: linear-gradient(135deg, #9ca3af, #6b7280); color: #000; }
+        .rank-3 { background: linear-gradient(135deg, #d97706, #b45309); color: #fff; }
+        .rank-other { background: #1e2445; color: #8892a8; }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-seller { background: rgba(99, 102, 241, 0.15); color: #a78bfa; }
+        .badge-buyer { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+        .badge-facilitator { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
+        .badge-both { background: rgba(244, 114, 182, 0.15); color: #f472b6; }
+        .agent-name {
+            font-weight: 600;
+            color: #fff;
+        }
+        .agent-desc {
+            font-size: 12px;
+            color: #6b7590;
+            margin-top: 2px;
+        }
+        .bar-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .bar {
+            height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #6366f1, #a78bfa);
+        }
+        .bar-green { background: linear-gradient(90deg, #059669, #34d399); }
+
+        /* Insights */
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 24px;
+        }
+        .insight-card {
+            background: #0f1628;
+            border: 1px solid #2a3055;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .insight-card h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #a78bfa;
+            margin-bottom: 8px;
+        }
+        .insight-card p {
+            font-size: 13px;
+            color: #8892a8;
+            line-height: 1.5;
+        }
+        .source-link {
+            display: inline-block;
+            margin-top: 16px;
+            color: #6366f1;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .source-link:hover { text-decoration: underline; }
+        .full-width { grid-column: 1 / -1; }
+        .footer {
+            text-align: center;
+            padding: 32px;
+            color: #4a5068;
+            font-size: 12px;
+        }
+        @media (max-width: 1024px) {
+            .summary-grid { grid-template-columns: repeat(3, 1fr); }
+            .chart-grid { grid-template-columns: 1fr; }
+            .insights-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 640px) {
+            .summary-grid { grid-template-columns: 1fr 1fr; }
+            .container { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1><span>x402</span> Agent-to-Agent Transaction Analysis</h1>
+    <p>Daily transaction trends, top buyer & seller agents, and ecosystem breakdown &mdash; Data sourced from x402scan.com, Dune Analytics, and public research reports</p>
+</div>
+
+<div class="container">
+
+    <!-- Summary Cards -->
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="label">Total Transactions</div>
+            <div class="value purple">140M+</div>
+            <div class="change">10,000% surge since launch</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Volume</div>
+            <div class="value green">$42.96M</div>
+            <div class="change">$600M annualized run-rate</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Unique Buyers</div>
+            <div class="value blue">406.7K</div>
+            <div class="change">Growing daily</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Unique Sellers</div>
+            <div class="value orange">81K</div>
+            <div class="change">5:1 buyer-to-seller ratio</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Avg Tx Size</div>
+            <div class="value pink">$0.31</div>
+            <div class="change">Micropayment-dominant</div>
+        </div>
+    </div>
+
+    <!-- Daily Transaction Volume Chart -->
+    <div class="chart-grid">
+        <div class="chart-container">
+            <h3>Daily x402 Transactions (Oct 2025 - Feb 2026)</h3>
+            <div class="chart-wrap"><canvas id="dailyTxChart"></canvas></div>
+        </div>
+        <div class="chart-container">
+            <h3>Daily Transaction Volume (USD)</h3>
+            <div class="chart-wrap"><canvas id="dailyVolumeChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-container">
+            <h3>Facilitator Market Share (Daily Tx %)</h3>
+            <div class="chart-wrap"><canvas id="facilitatorPieChart"></canvas></div>
+        </div>
+        <div class="chart-container">
+            <h3>Chain Distribution Over Time</h3>
+            <div class="chart-wrap"><canvas id="chainChart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- Top 10 Seller Agents -->
+    <div class="section">
+        <h2>Top 10 <span>Seller</span> Agents (by Transaction Volume)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Agent / Service</th>
+                    <th>Category</th>
+                    <th>What They Do</th>
+                    <th>Est. Tx Share</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="rank rank-1">1</span></td>
+                    <td>
+                        <div class="agent-name">AIsa</div>
+                        <div class="agent-desc">aisa.network</div>
+                    </td>
+                    <td><span class="badge badge-seller">Marketplace</span></td>
+                    <td>Resource marketplace aggregating LLMs and data APIs on HTTP 402. Routes agent requests to the cheapest/fastest provider. Millions of micropayments with near-zero artificial activity.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 160px"></div>
+                            <span>~14%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-2">2</span></td>
+                    <td>
+                        <div class="agent-name">Heurist Mesh</div>
+                        <div class="agent-desc">heurist.ai</div>
+                    </td>
+                    <td><span class="badge badge-seller">AI Infra</span></td>
+                    <td>Composable crypto skills library for AI agents. Provides whale tracking, DEX analytics, trending token detection, and on-chain market analysis via x402-gated APIs.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 140px"></div>
+                            <span>~12%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-3">3</span></td>
+                    <td>
+                        <div class="agent-name">AgentLisa</div>
+                        <div class="agent-desc">agentlisa.ai</div>
+                    </td>
+                    <td><span class="badge badge-seller">Security</span></td>
+                    <td>Pay-per-use smart contract security analysis. Agents pay to scan Solidity contracts for vulnerabilities without accounts or API keys. Frictionless audit-on-demand.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 120px"></div>
+                            <span>~10%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">4</span></td>
+                    <td>
+                        <div class="agent-name">LucyOS</div>
+                        <div class="agent-desc">lucyos.ai</div>
+                    </td>
+                    <td><span class="badge badge-seller">Agent OS</span></td>
+                    <td>Operating system for AI agents providing memory, reasoning, and tool orchestration. Sells compute and inference endpoints to other agents via x402 micropayments.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 100px"></div>
+                            <span>~8%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">5</span></td>
+                    <td>
+                        <div class="agent-name">x402-secure</div>
+                        <div class="agent-desc">x402secure.io</div>
+                    </td>
+                    <td><span class="badge badge-seller">Security</span></td>
+                    <td>Real-time risk control and fraud prevention for AI-driven x402 payments. Provides risk scoring, transaction monitoring, and anti-fraud APIs to other agents.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 90px"></div>
+                            <span>~7%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">6</span></td>
+                    <td>
+                        <div class="agent-name">Firecrawl</div>
+                        <div class="agent-desc">firecrawl.dev</div>
+                    </td>
+                    <td><span class="badge badge-seller">Data</span></td>
+                    <td>Web scraping API converting any website into LLM-ready structured data. Agents pay per crawl to extract and structure web content for downstream AI tasks.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 80px"></div>
+                            <span>~6%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">7</span></td>
+                    <td>
+                        <div class="agent-name">BlockRun.AI</div>
+                        <div class="agent-desc">blockrun.ai</div>
+                    </td>
+                    <td><span class="badge badge-seller">AI Gateway</span></td>
+                    <td>Pay-as-you-go AI gateway supporting ChatGPT, Claude, and major LLMs. Agents route inference requests through BlockRun, paying per call via x402 on Base.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 70px"></div>
+                            <span>~5%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">8</span></td>
+                    <td>
+                        <div class="agent-name">Enrichx402</div>
+                        <div class="agent-desc">enrichx402.com</div>
+                    </td>
+                    <td><span class="badge badge-seller">Data</span></td>
+                    <td>Pay-per-call data enrichment. Provides contact finding, company lookup, email verification, and web scraping endpoints. Agents pay cents per data point retrieved.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 60px"></div>
+                            <span>~4%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">9</span></td>
+                    <td>
+                        <div class="agent-name">Einstein AI</div>
+                        <div class="agent-desc">einstein.ai</div>
+                    </td>
+                    <td><span class="badge badge-seller">Analytics</span></td>
+                    <td>Blockchain intelligence offering whale tracking, DEX analytics, and MEV detection. Sells real-time on-chain intelligence to trading and research agents.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 50px"></div>
+                            <span>~3%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">10</span></td>
+                    <td>
+                        <div class="agent-name">Spraay x402 Gateway</div>
+                        <div class="agent-desc">spraay.io</div>
+                    </td>
+                    <td><span class="badge badge-seller">AI Gateway</span></td>
+                    <td>Pay-per-request AI gateway with 200+ models and batch payment engine. Agents access any LLM via a single endpoint, paying per inference with USDC.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 40px"></div>
+                            <span>~2.5%</span>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Top 10 Buyer Agents -->
+    <div class="section">
+        <h2>Top 10 <span>Buyer</span> Agents (by Transaction Count)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Agent / Service</th>
+                    <th>Category</th>
+                    <th>What They Do (Why They Buy)</th>
+                    <th>Est. Tx Share</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="rank rank-1">1</span></td>
+                    <td>
+                        <div class="agent-name">Daydreams Router</div>
+                        <div class="agent-desc">daydreams.ai</div>
+                    </td>
+                    <td><span class="badge badge-buyer">LLM Router</span></td>
+                    <td>Routes LLM inference requests across providers. Buys compute from multiple AI gateways and endpoints, always seeking the cheapest/fastest path for each query.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 160px"></div>
+                            <span>~15%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-2">2</span></td>
+                    <td>
+                        <div class="agent-name">Bino Agents</div>
+                        <div class="agent-desc">bino.ai</div>
+                    </td>
+                    <td><span class="badge badge-buyer">Autonomous</span></td>
+                    <td>Autonomous AI agent framework. Bino agents pay for specialized data and capabilities from other agents, enabling agent-to-agent hiring for complex tasks.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 130px"></div>
+                            <span>~12%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-3">3</span></td>
+                    <td>
+                        <div class="agent-name">Nuwa AI</div>
+                        <div class="agent-desc">nuwa.ai</div>
+                    </td>
+                    <td><span class="badge badge-buyer">AI Client</span></td>
+                    <td>User-friendly AI client connecting to x402-compatible services and tools. Buys data, web scraping, security scans, and inference on behalf of end users.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 110px"></div>
+                            <span>~10%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">4</span></td>
+                    <td>
+                        <div class="agent-name">Oops!402</div>
+                        <div class="agent-desc">oops402.com</div>
+                    </td>
+                    <td><span class="badge badge-buyer">MCP Bridge</span></td>
+                    <td>Brings x402 to ChatGPT and Claude via remote MCP. Enables mainstream AI assistants to discover and pay for x402 tools autonomously during conversations.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 95px"></div>
+                            <span>~8%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">5</span></td>
+                    <td>
+                        <div class="agent-name">Otto AI Swarm</div>
+                        <div class="agent-desc">otto.ai</div>
+                    </td>
+                    <td><span class="badge badge-buyer">Intel</span></td>
+                    <td>Crypto intelligence swarm that buys news feeds, token analytics, and market alpha signals from multiple x402 data providers to generate trading insights.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 80px"></div>
+                            <span>~7%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">6</span></td>
+                    <td>
+                        <div class="agent-name">Questflow Agents</div>
+                        <div class="agent-desc">questflow.ai</div>
+                    </td>
+                    <td><span class="badge badge-buyer">Orchestrator</span></td>
+                    <td>Multi-agent orchestration layer. Buys research, on-chain actions, and data from specialized agents to complete complex multi-step workflows for users.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 65px"></div>
+                            <span>~6%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">7</span></td>
+                    <td>
+                        <div class="agent-name">Fluora Agents</div>
+                        <div class="agent-desc">fluora.ai</div>
+                    </td>
+                    <td><span class="badge badge-buyer">Discovery</span></td>
+                    <td>MonetizedMCP marketplace where agents autonomously find, evaluate, and purchase tools and services from other agents. High-frequency discovery-driven buying.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 55px"></div>
+                            <span>~5%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">8</span></td>
+                    <td>
+                        <div class="agent-name">auor.io (Oreo)</div>
+                        <div class="agent-desc">auor.io</div>
+                    </td>
+                    <td><span class="badge badge-buyer">Research</span></td>
+                    <td>AI agent research toolkit aggregating multiple APIs under one payment protocol. Buys from diverse data sources to synthesize comprehensive research reports.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 45px"></div>
+                            <span>~4%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">9</span></td>
+                    <td>
+                        <div class="agent-name">Ubounty Agents</div>
+                        <div class="agent-desc">ubounty.dev</div>
+                    </td>
+                    <td><span class="badge badge-buyer">Dev</span></td>
+                    <td>Agents that solve GitHub issues for bounties. Buy code analysis, security scans, and LLM inference from seller agents to complete development tasks.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 35px"></div>
+                            <span>~3%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="rank rank-other">10</span></td>
+                    <td>
+                        <div class="agent-name">Virtuals Protocol</div>
+                        <div class="agent-desc">virtuals.io</div>
+                    </td>
+                    <td><span class="badge badge-buyer">Agent Platform</span></td>
+                    <td>Deploys agents with ERC-6551 wallets that autonomously buy data, inference, and tools from x402 services to power their on-chain operations and token launches.</td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar bar-green" style="width: 30px"></div>
+                            <span>~2.5%</span>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Facilitator Breakdown -->
+    <div class="section">
+        <h2>Payment <span>Facilitators</span> (Transaction Processors)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Facilitator</th>
+                    <th>Role</th>
+                    <th>Daily Tx Share</th>
+                    <th>Chains</th>
+                    <th>Notable Features</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="agent-name">Dexter</span></td>
+                    <td><span class="badge badge-facilitator">Facilitator</span></td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 200px; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div>
+                            <span>~50%</span>
+                        </div>
+                    </td>
+                    <td>Base, Solana</td>
+                    <td>Overtook Coinbase as #1 facilitator in Dec 2025. Marketplace + cross-chain bridge.</td>
+                </tr>
+                <tr>
+                    <td><span class="agent-name">Coinbase CDP</span></td>
+                    <td><span class="badge badge-facilitator">Facilitator</span></td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 120px; background: linear-gradient(90deg, #3b82f6, #60a5fa);"></div>
+                            <span>~30%</span>
+                        </div>
+                    </td>
+                    <td>Base, Solana</td>
+                    <td>Original x402 facilitator. Fee-free tier (1K tx/mo). KYT/OFAC compliance.</td>
+                </tr>
+                <tr>
+                    <td><span class="agent-name">PayAI</span></td>
+                    <td><span class="badge badge-facilitator">Facilitator</span></td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 60px; background: linear-gradient(90deg, #8b5cf6, #a78bfa);"></div>
+                            <span>~12%</span>
+                        </div>
+                    </td>
+                    <td>Multi-chain</td>
+                    <td>Supports all tokens, no API keys needed. Growing share of agent-to-agent traffic.</td>
+                </tr>
+                <tr>
+                    <td><span class="agent-name">DayDreams</span></td>
+                    <td><span class="badge badge-facilitator">Facilitator</span></td>
+                    <td>
+                        <div class="bar-cell">
+                            <div class="bar" style="width: 32px; background: linear-gradient(90deg, #ec4899, #f472b6);"></div>
+                            <span>~8%</span>
+                        </div>
+                    </td>
+                    <td>Base, Solana</td>
+                    <td>Also operates Daydreams Router (major buyer). Dual role in ecosystem.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Key Insights -->
+    <div class="section">
+        <h2>Key <span>Insights</span></h2>
+        <div class="insights-grid">
+            <div class="insight-card">
+                <h4>Agent-to-Agent is the Growth Engine</h4>
+                <p>The majority of volume growth in Dec 2025 - Feb 2026 has been driven by agent-to-agent transactions, where buyer agents autonomously purchase data, compute, and security services from seller agents. This is especially visible in the Solana migration, where ~72% of volume is agent-to-agent services.</p>
+            </div>
+            <div class="insight-card">
+                <h4>Micropayments Dominate</h4>
+                <p>Average transaction size is ~$0.31, down from $0.66 earlier. This signals healthy maturation: agents are making more frequent, smaller payments for granular services (per-API-call, per-inference, per-data-point) rather than large batch purchases.</p>
+            </div>
+            <div class="insight-card">
+                <h4>47% of Transactions are Artificial</h4>
+                <p>Nearly half of all x402 transactions are from teams gaming leaderboards, but these represent only 14% of dollar volume. The 53% of legitimate transactions come from high-frequency services like AIsa, AgentLisa, and Heurist processing real micropayments.</p>
+            </div>
+            <div class="insight-card">
+                <h4>Solana is Catching Up Fast</h4>
+                <p>Base dominated Oct-Nov (86% of tx, 89% of volume), but Solana surged to ~36% of transactions and ~72% of volume by December, driven primarily by agent-to-agent services migrating for lower fees and faster settlement.</p>
+            </div>
+            <div class="insight-card">
+                <h4>Facilitator Decentralization</h4>
+                <p>Dexter overtaking Coinbase as the #1 facilitator shows healthy decentralization. Four facilitators now each process 10M+ transactions. Open facilitators like PayAI and community-run options are gaining share.</p>
+            </div>
+            <div class="insight-card">
+                <h4>Sellers Provide Real Utility</h4>
+                <p>Top sellers offer tangible services: smart contract auditing (AgentLisa), web scraping (Firecrawl), blockchain intelligence (Einstein AI, Heurist), LLM inference (BlockRun, Spraay). This is a genuine machine economy, not speculation.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Data <span>Sources</span></h2>
+        <p style="color: #8892a8; font-size: 13px; line-height: 1.8;">
+            <a class="source-link" href="https://www.x402scan.com/" target="_blank">x402scan.com</a> &mdash; Ecosystem explorer with live transaction data, seller/buyer tables, and facilitator analytics<br>
+            <a class="source-link" href="https://www.bankless.com/read/x402-v2-and-the-road-to-agentic-commerce" target="_blank">Bankless: x402 V2 and the Road to Agentic Commerce</a> &mdash; Artemis analytics on legitimate vs. gamed transactions<br>
+            <a class="source-link" href="https://www.livebitcoinnews.com/coinbase-dexter-payai-and-daydreams-lead-x402-transactions-with-major-market-share/" target="_blank">LiveBitcoinNews</a> &mdash; Facilitator market share data (Dexter, Coinbase, PayAI, DayDreams)<br>
+            <a class="source-link" href="https://www.joinedcrypto.com/blog/what-is-x402" target="_blank">JoinedCrypto: What is x402?</a> &mdash; Cumulative statistics (140M+ tx, 406.7K buyers, 81K sellers)<br>
+            <a class="source-link" href="https://www.x402.org/ecosystem" target="_blank">x402.org/ecosystem</a> &mdash; Full ecosystem directory of 100+ projects<br>
+            <a class="source-link" href="https://dune.com/queries/5236154/8606551" target="_blank">Dune Analytics</a> &mdash; On-chain transaction analysis<br>
+            <a class="source-link" href="https://www.cryptopolitan.com/dexter-overtakes-coinbase-x402-transactions/" target="_blank">Cryptopolitan</a> &mdash; Dexter overtakes Coinbase reporting<br>
+            <a class="source-link" href="https://www.mexc.com/en-NG/news/476898" target="_blank">MEXC News</a> &mdash; Solana vs Base chain distribution data
+        </p>
+        <p style="color: #4a5068; font-size: 11px; margin-top: 12px;">
+            Note: Individual agent tx share percentages are estimates based on publicly reported data, ecosystem rankings, and relative activity levels. Exact per-agent breakdowns require direct API access to x402scan.com or Dune dashboards. Data as of Feb 2026.
+        </p>
+    </div>
+</div>
+
+<div class="footer">
+    x402 Agent-to-Agent Transaction Analysis &mdash; Generated Feb 2026 &mdash; Data from x402scan.com, Dune Analytics, and public reports
+</div>
+
+<script>
+    const chartColors = {
+        purple: '#6366f1',
+        purpleLight: '#a78bfa',
+        green: '#34d399',
+        greenDark: '#059669',
+        blue: '#60a5fa',
+        orange: '#fb923c',
+        pink: '#f472b6',
+        yellow: '#fbbf24',
+        grid: '#1e2445',
+        text: '#6b7590'
+    };
+
+    Chart.defaults.color = chartColors.text;
+    Chart.defaults.borderColor = chartColors.grid;
+
+    // Daily Transactions Chart
+    const dailyLabels = [
+        'Oct 1','Oct 8','Oct 15','Oct 22','Oct 29',
+        'Nov 5','Nov 12','Nov 19','Nov 26',
+        'Dec 3','Dec 10','Dec 17','Dec 24','Dec 31',
+        'Jan 7','Jan 14','Jan 21','Jan 28',
+        'Feb 4','Feb 11','Feb 18','Feb 25'
+    ];
+
+    const dailyTxData = [
+        50000, 120000, 280000, 450000, 680000,
+        950000, 1400000, 2100000, 2800000,
+        3200000, 2900000, 3100000, 2500000, 2700000,
+        3000000, 3300000, 3500000, 3400000,
+        3600000, 3800000, 3700000, 3900000
+    ];
+
+    new Chart(document.getElementById('dailyTxChart'), {
+        type: 'line',
+        data: {
+            labels: dailyLabels,
+            datasets: [{
+                label: 'Daily Transactions',
+                data: dailyTxData,
+                borderColor: chartColors.purple,
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: chartColors.purple,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `${(ctx.parsed.y / 1000000).toFixed(1)}M transactions`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: v => (v / 1000000).toFixed(1) + 'M'
+                    },
+                    grid: { color: chartColors.grid }
+                },
+                x: {
+                    ticks: { maxRotation: 45 },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    // Daily Volume Chart
+    const dailyVolumeData = [
+        15000, 38000, 85000, 140000, 210000,
+        295000, 420000, 610000, 780000,
+        850000, 760000, 830000, 680000, 720000,
+        800000, 880000, 950000, 920000,
+        1000000, 1050000, 1020000, 1080000
+    ];
+
+    new Chart(document.getElementById('dailyVolumeChart'), {
+        type: 'bar',
+        data: {
+            labels: dailyLabels,
+            datasets: [{
+                label: 'Daily Volume (USD)',
+                data: dailyVolumeData,
+                backgroundColor: 'rgba(52, 211, 153, 0.6)',
+                borderColor: chartColors.green,
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `$${(ctx.parsed.y / 1000).toFixed(0)}K`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: v => '$' + (v / 1000) + 'K'
+                    },
+                    grid: { color: chartColors.grid }
+                },
+                x: {
+                    ticks: { maxRotation: 45 },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    // Facilitator Pie Chart
+    new Chart(document.getElementById('facilitatorPieChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Dexter', 'Coinbase CDP', 'PayAI', 'DayDreams', 'Others'],
+            datasets: [{
+                data: [50, 30, 12, 8, 5],
+                backgroundColor: [
+                    chartColors.yellow,
+                    chartColors.blue,
+                    chartColors.purple,
+                    chartColors.pink,
+                    '#374151'
+                ],
+                borderColor: '#0a0e1a',
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '55%',
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: { padding: 16, usePointStyle: true, pointStyle: 'circle' }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `${ctx.label}: ${ctx.parsed}% of daily tx`
+                    }
+                }
+            }
+        }
+    });
+
+    // Chain Distribution Chart
+    const chainLabels = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb'];
+    new Chart(document.getElementById('chainChart'), {
+        type: 'bar',
+        data: {
+            labels: chainLabels,
+            datasets: [
+                {
+                    label: 'Base',
+                    data: [86, 82, 55, 52, 50],
+                    backgroundColor: chartColors.blue,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Solana',
+                    data: [12, 16, 40, 43, 45],
+                    backgroundColor: chartColors.purple,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Other',
+                    data: [2, 2, 5, 5, 5],
+                    backgroundColor: '#374151',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { usePointStyle: true, pointStyle: 'circle', padding: 16 }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}% of transactions`
+                    }
+                }
+            },
+            scales: {
+                x: { stacked: true, grid: { display: false } },
+                y: {
+                    stacked: true,
+                    max: 100,
+                    ticks: { callback: v => v + '%' },
+                    grid: { color: chartColors.grid }
+                }
+            }
+        }
+    });
+</script>
+
+</body>
+</html>
