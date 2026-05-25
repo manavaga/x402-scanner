@@ -2935,5 +2935,38 @@
         "rawLength": 201362
       }
     ]
+  },
+  {
+    "timestamp": "2026-05-25T09:56:17.734Z",
+    "stats": {
+      "totalTransactions": null,
+      "totalVolume": null,
+      "uniqueBuyers": null,
+      "uniqueSellers": ",",
+      "avgTxSize": null,
+      "lastUpdated": "2026-05-25"
+    },
+    "sourcesStatus": [
+      {
+        "source": "x402scan",
+        "hasData": false,
+        "rawLength": 534023
+      },
+      {
+        "source": "x402list",
+        "hasData": false,
+        "rawLength": 157859
+      },
+      {
+        "source": "dune",
+        "hasData": false,
+        "rawLength": 0
+      },
+      {
+        "source": "ecosystem",
+        "hasData": true,
+        "rawLength": 201362
+      }
+    ]
   }
 ]
