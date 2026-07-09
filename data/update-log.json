@@ -1,38 +1,5 @@
 [
   {
-    "timestamp": "2026-04-08T07:11:26.841Z",
-    "stats": {
-      "totalTransactions": null,
-      "totalVolume": "5",
-      "uniqueBuyers": null,
-      "uniqueSellers": ",",
-      "avgTxSize": null,
-      "lastUpdated": "2026-04-08"
-    },
-    "sourcesStatus": [
-      {
-        "source": "x402scan",
-        "hasData": false,
-        "rawLength": 1004147
-      },
-      {
-        "source": "x402list",
-        "hasData": false,
-        "rawLength": 157580
-      },
-      {
-        "source": "dune",
-        "hasData": false,
-        "rawLength": 0
-      },
-      {
-        "source": "ecosystem",
-        "hasData": true,
-        "rawLength": 571014
-      }
-    ]
-  },
-  {
     "timestamp": "2026-04-09T07:15:15.686Z",
     "stats": {
       "totalTransactions": null,
@@ -2956,6 +2923,39 @@
         "source": "x402list",
         "hasData": false,
         "rawLength": 154235
+      },
+      {
+        "source": "dune",
+        "hasData": false,
+        "rawLength": 0
+      },
+      {
+        "source": "ecosystem",
+        "hasData": true,
+        "rawLength": 49092
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-07-09T09:39:22.863Z",
+    "stats": {
+      "totalTransactions": null,
+      "totalVolume": "148",
+      "uniqueBuyers": null,
+      "uniqueSellers": ",",
+      "avgTxSize": null,
+      "lastUpdated": "2026-07-09"
+    },
+    "sourcesStatus": [
+      {
+        "source": "x402scan",
+        "hasData": false,
+        "rawLength": 691104
+      },
+      {
+        "source": "x402list",
+        "hasData": false,
+        "rawLength": 153870
       },
       {
         "source": "dune",
